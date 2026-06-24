@@ -1,0 +1,18 @@
+/* ============================================================================
+   index.css — Global Styles + Tailwind v4 Entry Point
+   ============================================================================
+   Tailwind v4 uses a single @import directive instead of the legacy
+   @tailwind base/components/utilities directives.
+   ============================================================================ */
+@import "tailwindcss";
+
+/* ── Base resets ── */
+body {
+  margin: 0;
+}
+
+/* ── Remove the constraining #root wrapper so the full-bleed grid layout
+     in App.jsx can stretch edge-to-edge ── */
+#root {
+  min-height: 100svh;
+}
