@@ -2,8 +2,10 @@ package com.taskmanager.backend.config;
 
 import com.taskmanager.backend.model.Domain;
 import com.taskmanager.backend.model.Task;
+import com.taskmanager.backend.model.User;
 import com.taskmanager.backend.repository.DomainRepository;
 import com.taskmanager.backend.repository.TaskRepository;
+import com.taskmanager.backend.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -11,27 +13,34 @@ import java.time.Instant;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
-
+    private final UserRepository userRepository;
     private final DomainRepository domainRepository;
     private final TaskRepository taskRepository;
 
-    public DataInitializer(DomainRepository domainRepository, TaskRepository taskRepository) {
+    public DataInitializer(DomainRepository domainRepository, TaskRepository taskRepository,UserRepository userRepository) {
         this.domainRepository = domainRepository;
         this.taskRepository = taskRepository;
+        this.userRepository=userRepository;
     }
 
     @Override
     public void run(String... args) throws Exception {
-        // 1. Seed Sample Workspace Domains
+
+        //1. Seed a default user profile
+        User defaultUser=new User("aadhi","aadhi123","aadhi123@gmail.com");
+        User savedUser=userRepository.save(defaultUser);
+        // 2. Seed Sample Workspace Domains
         Domain collegeDomain = new Domain("Academics", "#3B82F6", "🎓");
         Domain personalDomain = new Domain("Personal", "#10B981", "🏠");
 
+        collegeDomain.setUser(savedUser);
+        personalDomain.setUser(savedUser);
         domainRepository.save(collegeDomain);
         domainRepository.save(personalDomain);
 
-        // 2. Seed Your Frontend's Mock Task
+        // 3. Seed Your Frontend's Mock Task
         Task dsaTask = new Task(
-                1L, // user_id
+                savedUser, // user_id
                 "Finish DSA Assignment", // title
                 "Complete the graph theory implementation problems and submit on the student portal.", // description
                 "Pending", // status

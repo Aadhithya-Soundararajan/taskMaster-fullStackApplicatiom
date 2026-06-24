@@ -1,5 +1,5 @@
 // ============================================================================
-// App.jsx — Application Shell & State Orchestrator (v4 - Full Stack Connected)
+// App.jsx — Application Shell & State Orchestrator (v5 - Auth-Gated, User-Scoped)
 // ============================================================================
 import React, { useState, useEffect } from "react";
 
@@ -8,6 +8,8 @@ import Sidebar from "./components/Sidebar";
 import TaskForm from "./components/TaskForm";
 import FilterControls from "./components/FilterControls";
 import TaskList from "./components/TaskList";
+import Login from "./components/Login";
+import Signup from "./components/Signup";
 
 // 3-stage status cycle order
 const STATUS_CYCLE = ["Pending", "In Progress", "Completed"];
@@ -15,11 +17,25 @@ const BACKEND_URL = "http://localhost:8080/api";
 
 function App() {
   // ──────────────────────────────────────────────────────────────────────
-  // 1. Application Core State
+  // 1. Authentication State
+  // ──────────────────────────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(() => {
+    // Lazy initialization: restore session from localStorage on page refresh
+    try {
+      const stored = localStorage.getItem('task_manager_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [authView, setAuthView] = useState("login"); // "login" | "signup"
+
+  // ──────────────────────────────────────────────────────────────────────
+  // 2. Application Core State
   // ──────────────────────────────────────────────────────────────────────
   const [tasks, setTasks] = useState([]);
   const [domains, setDomains] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const [selectedDomainId, setSelectedDomainId] = useState(null); // null = "All Tasks"
   const [statusFilter, setStatusFilter] = useState("All");
@@ -32,12 +48,17 @@ function App() {
   const [taskToEdit, setTaskToEdit] = useState(null); // null = create mode, object = edit mode
 
   // ──────────────────────────────────────────────────────────────────────
-  // 2. Full-Stack Data Hydration Link (Initial Loading)
+  // 3. User-Scoped Data Hydration (watches currentUser.id)
   // ──────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Guard: Only fetch when a validated user session exists
+    if (!currentUser?.id) return;
+
+    setLoading(true);
+
     Promise.all([
-      fetch(`${BACKEND_URL}/tasks`),
-      fetch(`${BACKEND_URL}/domains`)
+      fetch(`${BACKEND_URL}/tasks/user/${currentUser.id}`),
+      fetch(`${BACKEND_URL}/domains/user/${currentUser.id}`)
     ])
       .then(async ([tasksRes, domainsRes]) => {
         if (!tasksRes.ok || !domainsRes.ok) throw new Error("Server communication failure");
@@ -56,12 +77,11 @@ function App() {
         // Adapter 2: Map Java Tasks to frontend layout & flatten relation structure
         const mappedTasks = rawTasks.map(t => ({
           id: t.id,
-          user_id: t.userId,
           title: t.title,
           description: t.description,
           status: t.status,
           priority: t.priority,
-          domain_id: t.domain ? t.domain.id : null, // Extract key out of nested object
+          domain_id: t.domain ? t.domain.id : null,
           due_date: t.dueDate,
           created_at: t.createdAt,
           updated_at: t.updatedAt,
@@ -70,16 +90,41 @@ function App() {
 
         setDomains(mappedDomains);
         setTasks(mappedTasks);
-        setLoading(false);
       })
       .catch(err => {
         console.error("Failed to connect to full-stack backend pipeline:", err);
+      })
+      .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [currentUser?.id]);
 
   // ──────────────────────────────────────────────────────────────────────
-  // 3. Derived / Computed Values
+  // 4. Auth Handlers
+  // ──────────────────────────────────────────────────────────────────────
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('task_manager_user', JSON.stringify(user));
+    setAuthView("login"); // Reset for next session
+  };
+
+  const handleLogout = () => {
+    // Flush ALL state to prevent cross-account UI visual leaks
+    localStorage.removeItem('task_manager_user');
+    setCurrentUser(null);
+    setTasks([]);
+    setDomains([]);
+    setSelectedDomainId(null);
+    setStatusFilter("All");
+    setSortBy("due_date");
+    setSearchTerm("");
+    setIsSidebarOpen(false);
+    setIsModalOpen(false);
+    setTaskToEdit(null);
+  };
+
+  // ──────────────────────────────────────────────────────────────────────
+  // 5. Derived / Computed Values
   // ──────────────────────────────────────────────────────────────────────
 
   // Resolve the active domain metadata for header display
@@ -131,15 +176,29 @@ function App() {
   }).length;
 
   // ──────────────────────────────────────────────────────────────────────
-  // 4. Handler Functions (Persisting Mutations to Database via REST)
+  // 6. Handler Functions (Persisting Mutations to Database via REST)
   // ──────────────────────────────────────────────────────────────────────
 
-  const handleSaveTask = (formFields) => {
-    // Package out data object into the camelCase matching structural format Java expects
+  /** Helper: Map a raw backend Task response to the frontend flat shape */
+  const mapBackendTask = (t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    priority: t.priority,
+    domain_id: t.domain ? t.domain.id : null,
+    due_date: t.dueDate,
+    created_at: t.createdAt,
+    updated_at: t.updatedAt,
+    completed_at: t.completedAt
+  });
+
+  const handleSaveTask = async (formFields) => {
+    // Package data into the nested object structure Java/Hibernate expects
     const targetDomainObj = formFields.domain_id ? { id: formFields.domain_id } : null;
 
     const backendPayload = {
-      userId: 1,
+      user: { id: currentUser.id },
       title: formFields.title,
       description: formFields.description,
       status: taskToEdit ? taskToEdit.status : "Pending",
@@ -148,60 +207,35 @@ function App() {
       domain: targetDomainObj
     };
 
-    if (taskToEdit) {
-      // ── UPDATE MODE (PUT Request) ──
-      fetch(`${BACKEND_URL}/tasks/${taskToEdit.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(backendPayload)
-      })
-        .then(res => res.json())
-        .then(updatedTask => {
-          const mapped = {
-            id: updatedTask.id,
-            user_id: updatedTask.userId,
-            title: updatedTask.title,
-            description: updatedTask.description,
-            status: updatedTask.status,
-            priority: updatedTask.priority,
-            domain_id: updatedTask.domain ? updatedTask.domain.id : null,
-            due_date: updatedTask.dueDate,
-            created_at: updatedTask.createdAt,
-            updated_at: updatedTask.updatedAt,
-            completed_at: updatedTask.completedAt
-          };
-          setTasks(prev => prev.map(t => t.id === taskToEdit.id ? mapped : t));
-          closeModal();
+    try {
+      if (taskToEdit) {
+        // ── UPDATE MODE (PUT Request) ──
+        const res = await fetch(`${BACKEND_URL}/tasks/${taskToEdit.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(backendPayload)
         });
-    } else {
-      // ── CREATE MODE (POST Request) ──
-      fetch(`${BACKEND_URL}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(backendPayload)
-      })
-        .then(res => res.json())
-        .then(newTask => {
-          const mapped = {
-            id: newTask.id,
-            user_id: newTask.userId,
-            title: newTask.title,
-            description: newTask.description,
-            status: newTask.status,
-            priority: newTask.priority,
-            domain_id: newTask.domain ? newTask.domain.id : null,
-            due_date: newTask.dueDate,
-            created_at: newTask.createdAt,
-            updated_at: newTask.updatedAt,
-            completed_at: newTask.completedAt
-          };
-          setTasks(prev => [mapped, ...prev]);
-          closeModal();
+        if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+        const updatedTask = await res.json();
+        setTasks(prev => prev.map(t => t.id === taskToEdit.id ? mapBackendTask(updatedTask) : t));
+      } else {
+        // ── CREATE MODE (POST Request) ──
+        const res = await fetch(`${BACKEND_URL}/tasks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(backendPayload)
         });
+        if (!res.ok) throw new Error(`Create failed: ${res.status}`);
+        const newTask = await res.json();
+        setTasks(prev => [mapBackendTask(newTask), ...prev]);
+      }
+      closeModal();
+    } catch (err) {
+      console.error("Task save error:", err);
     }
   };
 
-  const handleToggleStatus = (taskId) => {
+  const handleToggleStatus = async (taskId) => {
     const targetTask = tasks.find(t => t.id === taskId);
     if (!targetTask) return;
 
@@ -209,7 +243,7 @@ function App() {
     const nextStatus = STATUS_CYCLE[(currentIndex + 1) % STATUS_CYCLE.length];
 
     const backendPayload = {
-      userId: targetTask.user_id,
+      user: { id: currentUser.id },
       title: targetTask.title,
       description: targetTask.description,
       status: nextStatus,
@@ -219,61 +253,57 @@ function App() {
       domain: targetTask.domain_id ? { id: targetTask.domain_id } : null
     };
 
-    fetch(`${BACKEND_URL}/tasks/${taskId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(backendPayload)
-    })
-      .then(res => res.json())
-      .then(updatedTask => {
-        const mapped = {
-          id: updatedTask.id,
-          user_id: updatedTask.userId,
-          title: updatedTask.title,
-          description: updatedTask.description,
-          status: updatedTask.status,
-          priority: updatedTask.priority,
-          domain_id: updatedTask.domain ? updatedTask.domain.id : null,
-          due_date: updatedTask.dueDate,
-          created_at: updatedTask.createdAt,
-          updated_at: updatedTask.updatedAt,
-          completed_at: updatedTask.completedAt
-        };
-        setTasks(prev => prev.map(t => t.id === taskId ? mapped : t));
+    try {
+      const res = await fetch(`${BACKEND_URL}/tasks/${taskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backendPayload)
       });
+      if (!res.ok) throw new Error(`Status toggle failed: ${res.status}`);
+      const updatedTask = await res.json();
+      setTasks(prev => prev.map(t => t.id === taskId ? mapBackendTask(updatedTask) : t));
+    } catch (err) {
+      console.error("Status toggle error:", err);
+    }
   };
 
-  const handleDeleteTask = (taskId) => {
-    fetch(`${BACKEND_URL}/tasks/${taskId}`, { method: "DELETE" })
-      .then(res => {
-        if (res.ok) {
-          setTasks(prev => prev.filter((t) => t.id !== taskId));
-        }
-      });
+  const handleDeleteTask = async (taskId) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/tasks/${taskId}`, { method: "DELETE" });
+      if (res.ok) {
+        setTasks(prev => prev.filter((t) => t.id !== taskId));
+      }
+    } catch (err) {
+      console.error("Delete task error:", err);
+    }
   };
 
-  const handleAddDomain = (name, emoji, colorHex) => {
+  const handleAddDomain = async (name, emoji, colorHex) => {
     const backendPayload = {
       name: name,
       emoji: emoji,
-      colorCode: colorHex
+      colorCode: colorHex,
+      user: { id: currentUser.id }
     };
 
-    fetch(`${BACKEND_URL}/domains`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(backendPayload)
-    })
-      .then(res => res.json())
-      .then(newDomain => {
-        const mapped = {
-          id: newDomain.id,
-          name: newDomain.name,
-          emoji: newDomain.emoji,
-          color_code: newDomain.colorCode
-        };
-        setDomains(prev => [...prev, mapped]);
+    try {
+      const res = await fetch(`${BACKEND_URL}/domains`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backendPayload)
       });
+      if (!res.ok) throw new Error(`Domain creation failed: ${res.status}`);
+      const newDomain = await res.json();
+      const mapped = {
+        id: newDomain.id,
+        name: newDomain.name,
+        emoji: newDomain.emoji,
+        color_code: newDomain.colorCode
+      };
+      setDomains(prev => [...prev, mapped]);
+    } catch (err) {
+      console.error("Domain creation error:", err);
+    }
   };
 
   // ── Modal flow helpers ──
@@ -282,21 +312,41 @@ function App() {
   const closeModal = () => { setIsModalOpen(false); setTaskToEdit(null); };
 
   // ──────────────────────────────────────────────────────────────────────
-  // 5. Ambient Engine Loading Interceptor
+  // 7. Authentication Gate — Render Login/Signup if no session
+  // ──────────────────────────────────────────────────────────────────────
+  if (!currentUser) {
+    if (authView === "signup") {
+      return (
+        <Signup
+          onLoginSuccess={handleLoginSuccess}
+          onSwitchToLogin={() => setAuthView("login")}
+        />
+      );
+    }
+    return (
+      <Login
+        onLoginSuccess={handleLoginSuccess}
+        onSwitchToSignup={() => setAuthView("signup")}
+      />
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // 8. Ambient Engine Loading Interceptor
   // ──────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 font-sans">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-sm font-medium tracking-wide text-slate-400 animate-pulse">
-          Connecting to Relational H2 Engine...
+          Loading {currentUser.username}'s workspace...
         </p>
       </div>
     );
   }
 
   // ──────────────────────────────────────────────────────────────────────
-  // 6. Main Application Render Tree
+  // 9. Main Application Render Tree
   // ──────────────────────────────────────────────────────────────────────
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -308,6 +358,8 @@ function App() {
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
         onAddDomain={handleAddDomain}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       <div

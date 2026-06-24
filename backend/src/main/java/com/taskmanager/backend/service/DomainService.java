@@ -19,6 +19,10 @@ public class DomainService {
         return domainRepository.findAll();
     }
 
+    public List<Domain> getDomainsByUserId(Long userId) {
+        return domainRepository.findByUserId(userId);
+    }
+
     public Domain saveOrUpdateDomain(Domain domain) {
         return domainRepository.save(domain);
     }

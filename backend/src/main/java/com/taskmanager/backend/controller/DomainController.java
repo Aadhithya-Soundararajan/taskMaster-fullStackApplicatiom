@@ -24,10 +24,22 @@ public class DomainController {
         return domainService.getAllDomains();
     }
 
+    // NEW GET: http://localhost:8080/api/domains/user/1
+    // Essential for the frontend to render only the active user's workspace categories
+    @GetMapping("/user/{userId}")
+    public List<Domain> getDomainsByUserId(@PathVariable Long userId) {
+        return domainService.getDomainsByUserId(userId);
+    }
+
     // POST: http://localhost:8080/api/domains
     @PostMapping
-    public Domain createDomain(@RequestBody Domain domain) {
-        return domainService.saveOrUpdateDomain(domain);
+    public ResponseEntity<Domain> createDomain(@RequestBody Domain domain) {
+        // Validation Guard: Ensure a domain workspace isn't created without an owner
+        if (domain.getUser() == null || domain.getUser().getId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Domain savedDomain = domainService.saveOrUpdateDomain(domain);
+        return ResponseEntity.ok(savedDomain);
     }
 
     // DELETE: http://localhost:8080/api/domains/1

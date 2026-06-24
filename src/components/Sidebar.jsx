@@ -1,10 +1,10 @@
 // ============================================================================
-// Sidebar.jsx — Navigation & Domain Switcher (v3: Emoji & Spectrum Overlays)
+// Sidebar.jsx — Navigation & Domain Switcher (v4: Auth-Aware + Logout)
 // ============================================================================
-// Renders the left-rail panel containing the app brand, "All Tasks" shortcut,
-// per-domain navigation buttons with emoji icons and color-tinted active states,
-// and inline domain creation with emoji + color picker. On mobile, behaves as
-// a slide-out overlay drawer.
+// Renders the left-rail panel containing the app brand, logged-in user info,
+// "All Tasks" shortcut, per-domain navigation buttons with emoji icons and
+// color-tinted active states, inline domain creation with emoji + color picker,
+// and a logout button. On mobile, behaves as a slide-out overlay drawer.
 //
 // Props contract:
 //   domains             — Array of domain objects ({ id, name, color_code, emoji })
@@ -14,6 +14,8 @@
 //   isSidebarOpen       — Boolean controlling mobile drawer visibility
 //   setIsSidebarOpen    — Callback to toggle the mobile drawer
 //   onAddDomain         — Callback(name, emoji, colorHex) to create a new domain
+//   currentUser         — The logged-in user object ({ id, username, email })
+//   onLogout            — Callback() to sign out and flush all session state
 // ============================================================================
 import React, { useState } from "react";
 
@@ -25,6 +27,8 @@ export default function Sidebar({
   isSidebarOpen,
   setIsSidebarOpen,
   onAddDomain,
+  currentUser,
+  onLogout,
 }) {
   // ── Local state for inline domain creation form ──
   const [isCreating, setIsCreating] = useState(false);
@@ -107,6 +111,19 @@ export default function Sidebar({
               ✕
             </button>
           </div>
+
+          {/* ── Logged-in User Identity ── */}
+          {currentUser && (
+            <div className="flex items-center gap-3 mb-6 px-2 py-2.5 rounded-xl bg-slate-800/40 border border-slate-800">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {currentUser.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-200 truncate">{currentUser.username}</p>
+                <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
+              </div>
+            </div>
+          )}
 
           {/* ── Section Label ── */}
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
@@ -257,6 +274,16 @@ export default function Sidebar({
             className="w-full mt-auto py-2 border border-dashed border-slate-700 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-300 hover:border-slate-500 transition"
           >
             + New Domain Workspace
+          </button>
+        )}
+
+        {/* ── Logout Button (always visible at bottom) ── */}
+        {currentUser && (
+          <button
+            onClick={onLogout}
+            className="w-full mt-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition flex items-center justify-center gap-2"
+          >
+            ⏻ Sign Out
           </button>
         )}
       </div>

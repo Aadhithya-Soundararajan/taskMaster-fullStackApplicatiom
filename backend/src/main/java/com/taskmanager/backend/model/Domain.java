@@ -17,6 +17,10 @@ public class Domain {
     @Column(name = "color_code", nullable = false)
     private String colorCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
     private String emoji;
 
     // Standard Boilerplate No-Args Constructor (Required by JPA)
@@ -42,4 +46,7 @@ public class Domain {
 
     public String getEmoji() { return emoji; }
     public void setEmoji(String emoji) { this.emoji = emoji; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 }

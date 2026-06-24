@@ -9,7 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
-@CrossOrigin(origins = "*") // Allows your frontend IDE window to talk to this backend without CORS blocks
+@CrossOrigin(origins = "*")
 public class TaskController {
 
     private final TaskService taskService;
@@ -40,8 +40,13 @@ public class TaskController {
 
     // POST: http://localhost:8080/api/tasks
     @PostMapping
-    public Task createTask(@RequestBody Task task) {
-        return taskService.saveOrUpdateTask(task);
+    public ResponseEntity<Task> createTask(@RequestBody Task task) {
+        // Validation Guard: Ensure a task isn't submitted without an owner
+        if (task.getUser() == null || task.getUser().getId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Task savedTask = taskService.saveOrUpdateTask(task);
+        return ResponseEntity.ok(savedTask);
     }
 
     // PUT: http://localhost:8080/api/tasks/101
@@ -55,6 +60,11 @@ public class TaskController {
             existingTask.setDueDate(taskDetails.getDueDate());
             existingTask.setCompletedAt(taskDetails.getCompletedAt());
             existingTask.setDomain(taskDetails.getDomain());
+
+            // CRITICAL UPGRADE: Retain the existing user owner if the update payload leaves it blank
+            if (taskDetails.getUser() != null) {
+                existingTask.setUser(taskDetails.getUser());
+            }
 
             Task updatedTask = taskService.saveOrUpdateTask(existingTask);
             return ResponseEntity.ok(updatedTask);

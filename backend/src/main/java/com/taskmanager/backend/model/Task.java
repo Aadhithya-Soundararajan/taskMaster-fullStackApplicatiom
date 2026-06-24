@@ -11,8 +11,12 @@ public class Task {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", nullable = false)
-    private Long userId;
+    // @Column(name = "user_id", nullable = false)
+    //private Long userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false) // Creates the formal user_id Foreign Key column in the table
+    private User user;
+
 
     @Column(nullable = false)
     private String title;
@@ -43,8 +47,8 @@ public class Task {
     public Task() {}
 
     // Complete Constructor for data initializers
-    public Task(Long userId, String title, String description, String status, String priority, Instant dueDate, Domain domain) {
-        this.userId = userId;
+    public Task(User user, String title, String description, String status, String priority, Instant dueDate, Domain domain) {
+        this.user = user;
         this.title = title;
         this.description = description;
         this.status = status;
@@ -64,8 +68,7 @@ public class Task {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -93,4 +96,8 @@ public class Task {
 
     public Domain getDomain() { return domain; }
     public void setDomain(Domain domain) { this.domain = domain; }
+
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+
 }
