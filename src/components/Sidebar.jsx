@@ -1,10 +1,14 @@
 // ============================================================================
-// Sidebar.jsx — Navigation & Domain Switcher (v4: Auth-Aware + Logout)
+// Sidebar.jsx — Navigation & Domain Switcher (v5: Hybrid Workspace Domains)
 // ============================================================================
 // Renders the left-rail panel containing the app brand, logged-in user info,
 // "All Tasks" shortcut, per-domain navigation buttons with emoji icons and
 // color-tinted active states, inline domain creation with emoji + color picker,
 // and a logout button. On mobile, behaves as a slide-out overlay drawer.
+//
+// ARCHITECTURE NOTE (v5): This sidebar contains ONLY spatial domain selection.
+// Timeline views (Today's Focus, Routines & Habits) are handled by the
+// horizontal tab bar in App.jsx — NOT in the sidebar.
 //
 // Props contract:
 //   domains             — Array of domain objects ({ id, name, color_code, emoji })
@@ -61,6 +65,7 @@ export default function Sidebar({
 
   /**
    * handleDomainSelect — Selects a domain and auto-closes sidebar on mobile.
+   * This sets `activeDomain` in App.jsx via the setSelectedDomainId callback.
    */
   const handleDomainSelect = (domainId) => {
     setSelectedDomainId(domainId);

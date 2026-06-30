@@ -1,9 +1,16 @@
 // ============================================================================
-// TaskItem.jsx — Single Task Row (v2: 3-Stage Status Cycling & Edit Mode)
+// TaskItem.jsx — Single Task Row (v4: Time-Aware + Schedule + Case-Normalized)
 // ============================================================================
 // Renders one task entry: clickable status badge (3-stage cycle), title with
-// strike-through on completion, priority badge, domain tag, overdue alert,
-// description excerpt, due date, edit button, and delete button.
+// strike-through on completion, priority badge (case-normalized), domain tag,
+// overdue alert, schedule label (one-time with time vs recurring), description
+// excerpt, due date/time, edit button, and delete button.
+//
+// ARCHITECTURE NOTE (v4):
+//   - Priority strings are normalized via .toLowerCase() before color lookup
+//   - Schedule labels display recurring patterns (🔁 Every Day / Mon, Wed, Fri)
+//   - One-time tasks show precise deadline with time component when available
+//   - Time-aware "Due at HH:MM" / "Today at HH:MM" / "Tomorrow at HH:MM"
 //
 // Props contract:
 //   task             — The individual task object to render
@@ -14,11 +21,11 @@
 // ============================================================================
 import React from "react";
 
-// Priority → Tailwind class mapping (kept component-local for encapsulation)
+// Priority → Tailwind class mapping (keyed by LOWERCASE for case normalization)
 const PRIORITY_STYLES = {
-  High:   "bg-rose-500/10 text-rose-400 border-rose-500/20",
-  Medium: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  Low:    "bg-slate-500/10 text-slate-400 border-slate-500/20",
+  high:   "bg-rose-500/10 text-rose-400 border-rose-500/20",
+  medium: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  low:    "bg-slate-500/10 text-slate-400 border-slate-500/20",
 };
 
 // Status → visual style mapping for the clickable status badge
@@ -35,6 +42,37 @@ const STATUS_ICONS = {
   Completed:     "●",
 };
 
+/**
+ * formatRecurrenceDays — Converts raw DB string like "MON,WED,FRI"
+ * into readable sentence-cased form like "Mon, Wed, Fri"
+ */
+function formatRecurrenceDays(raw) {
+  if (!raw) return "";
+  return raw
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean)
+    .map((d) => d.charAt(0).toUpperCase() + d.slice(1).toLowerCase())
+    .join(", ");
+}
+
+/**
+ * formatTimeComponent — Extracts a human-readable time string from a Date.
+ * Returns "" if the time is midnight-ish (likely no time was set).
+ * Returns "at HH:MM AM/PM" if a meaningful time is present.
+ */
+function formatTimeComponent(dateObj) {
+  const hours = dateObj.getHours();
+  const minutes = dateObj.getMinutes();
+  // If exactly midnight, consider no meaningful time set
+  if (hours === 0 && minutes === 0) return "";
+  // Format as 12-hour with AM/PM
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 === 0 ? 12 : hours % 12;
+  const displayMinutes = String(minutes).padStart(2, "0");
+  return ` at ${displayHours}:${displayMinutes} ${period}`;
+}
+
 export default function TaskItem({
   task,
   domain,
@@ -43,6 +81,11 @@ export default function TaskItem({
   onDeleteTask,
 }) {
   const isCompleted = task.status === "Completed";
+
+  // ── Case-Normalized Priority Lookup ──
+  // Apply .toLowerCase() before feeding to the color-token dictionary
+  const normalizedPriority = (task.priority || "medium").toLowerCase();
+  const priorityClass = PRIORITY_STYLES[normalizedPriority] || PRIORITY_STYLES.medium;
 
   // ── Overdue Detection ──
   // A task is overdue if it's NOT completed, has a due_date, and that date is in the past.
@@ -83,11 +126,9 @@ export default function TaskItem({
             {task.title}
           </h3>
 
-          {/* Priority badge */}
+          {/* Priority badge (case-normalized) */}
           <span
-            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-              PRIORITY_STYLES[task.priority]
-            }`}
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${priorityClass}`}
           >
             {task.priority}
           </span>
@@ -107,6 +148,13 @@ export default function TaskItem({
             {domain ? domain.name : "Inbox"}
           </span>
 
+          {/* ── Recurring Task Type Badge ── */}
+          {task.taskType === "RECURRING" && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20 flex items-center gap-1">
+              🔁 Routine
+            </span>
+          )}
+
           {/* ── Overdue Warning Badge ── */}
           {isOverdue && (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/30 animate-pulse">
@@ -124,17 +172,42 @@ export default function TaskItem({
           </p>
         )}
 
-        {/* Metadata footer: smart relative due date badge */}
+        {/* Metadata footer: schedule-aware labeling */}
         <div className="flex items-center gap-4 text-[10px] font-medium">
+          {/* ── Schedule Label ── */}
           {(() => {
-            // ── Smart Relative Date Helper ──
-            // Computes a human-friendly label relative to the current system date.
+            // RECURRING task: show loop icon with frequency details
+            if (task.taskType === "RECURRING") {
+              if (task.frequency === "DAILY") {
+                return (
+                  <span className="text-violet-400 flex items-center gap-1">
+                    🔁 Every Day
+                  </span>
+                );
+              }
+              if (task.frequency === "CUSTOM") {
+                return (
+                  <span className="text-violet-400 flex items-center gap-1">
+                    🔁 {formatRecurrenceDays(task.recurrenceDays)}
+                  </span>
+                );
+              }
+              // Fallback for recurring with unknown frequency
+              return (
+                <span className="text-violet-400 flex items-center gap-1">
+                  🔁 Recurring
+                </span>
+              );
+            }
+
+            // ONETIME task (default): show the calendar deadline countdown with time
             if (task.due_date === null) {
               return <span className="text-slate-500">📅 No Deadline</span>;
             }
 
             const now = new Date();
             const due = new Date(task.due_date);
+            const timeSuffix = formatTimeComponent(due);
 
             // Normalize both dates to midnight for day-level comparison
             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -143,27 +216,26 @@ export default function TaskItem({
             const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
             if (diffDays < 0) {
-              // Past due — overdue badge only shown for non-completed tasks
-              // (the main Overdue badge handles the alert; this shows the date context)
+              // Past due
               return (
                 <span className="text-red-400">
-                  📅 {Math.abs(diffDays)} {Math.abs(diffDays) === 1 ? "day" : "days"} ago
+                  📅 {Math.abs(diffDays)} {Math.abs(diffDays) === 1 ? "day" : "days"} ago{timeSuffix}
                 </span>
               );
             }
             if (diffDays === 0) {
               return (
-                <span className="text-amber-400">📅 Today</span>
+                <span className="text-amber-400">📅 Today{timeSuffix}</span>
               );
             }
             if (diffDays === 1) {
               return (
-                <span className="text-blue-400">📅 Tomorrow</span>
+                <span className="text-blue-400">📅 Tomorrow{timeSuffix}</span>
               );
             }
             // Future: more than 1 day away
             return (
-              <span className="text-slate-400">📅 In {diffDays} days</span>
+              <span className="text-slate-400">📅 In {diffDays} days{timeSuffix}</span>
             );
           })()}
         </div>

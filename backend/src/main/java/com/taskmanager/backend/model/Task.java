@@ -39,6 +39,15 @@ public class Task {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "task_type")
+    private String taskType;        // "ONETIME" or "RECURRING"
+
+    @Column(name = "frequency")
+    private String frequency;       // "DAILY", "WEEKLY", "CUSTOM" (Null if ONETIME)
+
+    @Column(name = "recurrence_days")
+    private String recurrenceDays;  // "MON,WED,FRI" (Null if DAILY or ONETIME)
+
     @ManyToOne
     @JoinColumn(name = "domain_id", nullable = true)
     private Domain domain;
@@ -99,5 +108,14 @@ public class Task {
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+
+    public String getTaskType() { return taskType; }
+    public void setTaskType(String taskType) { this.taskType = taskType; }
+
+    public String getFrequency() { return frequency; }
+    public void setFrequency(String frequency) { this.frequency = frequency; }
+
+    public String getRecurrenceDays() { return recurrenceDays; }
+    public void setRecurrenceDays(String recurrenceDays) { this.recurrenceDays = recurrenceDays; }
 
 }

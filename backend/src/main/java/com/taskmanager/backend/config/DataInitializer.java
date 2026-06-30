@@ -10,6 +10,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.time.Duration;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -30,30 +31,58 @@ public class DataInitializer implements CommandLineRunner {
         User defaultUser=new User("aadhi","aadhi123","aadhi123@gmail.com");
         User savedUser=userRepository.save(defaultUser);
         // 2. Seed Sample Workspace Domains
-        Domain collegeDomain = new Domain("Academics", "#3B82F6", "🎓");
+        Domain academicDomain = new Domain("Academics", "#3B82F6", "🎓");
         Domain personalDomain = new Domain("Personal", "#10B981", "🏠");
 
-        collegeDomain.setUser(savedUser);
+        academicDomain.setUser(savedUser);
         personalDomain.setUser(savedUser);
-        domainRepository.save(collegeDomain);
+        domainRepository.save(academicDomain    );
         domainRepository.save(personalDomain);
 
         // 3. Seed Your Frontend's Mock Task
-        Task dsaTask = new Task(
-                savedUser, // user_id
-                "Finish DSA Assignment", // title
-                "Complete the graph theory implementation problems and submit on the student portal.", // description
-                "Pending", // status
-                "High", // priority
-                Instant.parse("2026-06-23T23:59:59Z"), // due_date
-                collegeDomain // Relational link to the Academics Domain
-        );
+        // Inside your DataInitializer.java where you save tasks:
 
-        // Explicitly set the custom timestamps to match your exact frontend mock record
-        dsaTask.setCreatedAt(Instant.parse("2026-06-22T10:00:00Z"));
-        dsaTask.setUpdatedAt(Instant.parse("2026-06-22T14:30:00Z"));
+// 1. A classic One-Time Task
+        Task assignmentTask = new Task();
+        assignmentTask.setTitle("Finish DSA Assignment");
+        assignmentTask.setDescription("Graph theory implementation and Ford-Fulkerson algorithm analysis.");
+        assignmentTask.setStatus("PENDING");
+        assignmentTask.setPriority("High");
+        assignmentTask.setDueDate(Instant.now().plus(Duration.ofDays(3))); // Due in 3 days
+        assignmentTask.setTaskType("ONETIME");
+        assignmentTask.setFrequency(null);
+        assignmentTask.setRecurrenceDays(null);
+        assignmentTask.setUser(defaultUser);
+        assignmentTask.setDomain(academicDomain);
+        taskRepository.save(assignmentTask);
 
-        taskRepository.save(dsaTask);
+// 2. A Daily Habit Task
+        Task gymTask = new Task();
+        gymTask.setTitle("Evening Gym Session");
+        gymTask.setDescription("Push day workout routine.");
+        gymTask.setStatus("PENDING");
+        gymTask.setPriority("Medium");
+        gymTask.setDueDate(null); // Recurring habits don't need fixed due dates!
+        gymTask.setTaskType("RECURRING");
+        gymTask.setFrequency("DAILY");
+        gymTask.setRecurrenceDays(null);
+        gymTask.setUser(defaultUser);
+        gymTask.setDomain(personalDomain);
+        taskRepository.save(gymTask);
+
+// 3. A Custom Weekly Routine Task
+        Task labPrepTask = new Task();
+        labPrepTask.setTitle("Review Networking Lab Experiments");
+        labPrepTask.setDescription("Go over CSMA/CD protocols and routing table configurations.");
+        labPrepTask.setStatus("PENDING");
+        labPrepTask.setPriority("Low");
+        labPrepTask.setDueDate(null);
+        labPrepTask.setTaskType("RECURRING");
+        labPrepTask.setFrequency("CUSTOM");
+        labPrepTask.setRecurrenceDays("MON,WED,FRI"); // Runs 3 days a week
+        labPrepTask.setUser(defaultUser);
+        labPrepTask.setDomain(academicDomain);
+        taskRepository.save(labPrepTask);
 
         System.out.println(">> Relational Database Seeded Successfully With Mock Data!");
     }
