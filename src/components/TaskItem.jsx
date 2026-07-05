@@ -42,6 +42,14 @@ const STATUS_ICONS = {
   Completed:     "●",
 };
 
+// Helper to normalize backend status string (e.g. "IN_PROGRESS" -> "In Progress")
+function getDisplayStatus(rawStatus) {
+  if (rawStatus === "PENDING") return "Pending";
+  if (rawStatus === "IN_PROGRESS") return "In Progress";
+  if (rawStatus === "COMPLETED") return "Completed";
+  return rawStatus || "Pending";
+}
+
 /**
  * formatRecurrenceDays — Converts raw DB string like "MON,WED,FRI"
  * into readable sentence-cased form like "Mon, Wed, Fri"
@@ -80,7 +88,8 @@ export default function TaskItem({
   onOpenEditModal,
   onDeleteTask,
 }) {
-  const isCompleted = task.status === "Completed";
+  const displayStatus = getDisplayStatus(task.status);
+  const isCompleted = displayStatus === "Completed";
 
   // ── Case-Normalized Priority Lookup ──
   // Apply .toLowerCase() before feeding to the color-token dictionary
@@ -105,11 +114,11 @@ export default function TaskItem({
       <button
         onClick={() => onToggleStatus(task.id)}
         className={`text-[10px] font-bold px-2.5 py-1 rounded-full border cursor-pointer transition mt-0.5 shrink-0 ${
-          STATUS_STYLES[task.status]
+          STATUS_STYLES[displayStatus] || STATUS_STYLES.Pending
         }`}
-        title={`Click to advance status (${task.status})`}
+        title={`Click to advance status (${displayStatus})`}
       >
-        {STATUS_ICONS[task.status]} {task.status}
+        {STATUS_ICONS[displayStatus] || "○"} {displayStatus}
       </button>
 
       {/* ── Task Body ── */}
